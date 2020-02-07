@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/GoogleCloudPlatform/terraformer/terraform_utils"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/codebuild"
 )
 
@@ -27,17 +28,37 @@ type CodeBuildGenerator struct {
 	AWSService
 }
 
-func (g CodeBuildGenerator) createResources(projectList []string) []terraform_utils.Resource {
-	var resources []terraform_utils.Resource
-	for _, project := range projectList {
-		resources = append(resources, terraform_utils.NewSimpleResource(
+func (g *CodeBuildGenerator) loadProjects(svc *codebuild.Client) error {
+	output, err := svc.ListProjectsRequest(&codebuild.ListProjectsInput{}).Send(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, project := range output.Projects {
+		g.Resources = append(g.Resources, terraform_utils.NewSimpleResource(
 			project,
 			project,
 			"aws_codebuild_project",
 			"aws",
 			codebuildAllowEmptyValues))
 	}
-	return resources
+	return nil
+}
+
+func (g *CodeBuildGenerator) loadSourceCredentials(svc *codebuild.Client) error {
+	output, err := svc.ListSourceCredentialsRequest(&codebuild.ListSourceCredentialsInput{}).Send(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, sourceCredentials := range output.SourceCredentialsInfos {
+		resourceArn := aws.StringValue(sourceCredentials.Arn)
+		g.Resources = append(g.Resources, terraform_utils.NewSimpleResource(
+			resourceArn,
+			resourceArn,
+			"aws_codebuild_source_credential",
+			"aws",
+			codebuildAllowEmptyValues))
+	}
+	return nil
 }
 
 func (g *CodeBuildGenerator) InitResources() error {
@@ -46,10 +67,13 @@ func (g *CodeBuildGenerator) InitResources() error {
 		return e
 	}
 	svc := codebuild.New(config)
-	output, err := svc.ListProjectsRequest(&codebuild.ListProjectsInput{}).Send(context.Background())
-	if err != nil {
+
+	if err := g.loadProjects(svc); err != nil {
 		return err
 	}
-	g.Resources = g.createResources(output.Projects)
+	if err := g.loadSourceCredentials(svc); err != nil {
+		return err
+	}
+
 	return nil
 }

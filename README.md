@@ -399,6 +399,7 @@ In that case terraformer will not know with which region resources are associate
     * `aws_cloudtrail`
 *   `codebuild`
     * `aws_codebuild_project`
+    * `aws_codebuild_source_credential`
 *   `codecommit`
     * `aws_codecommit_repository`
 *   `codepipeline`
